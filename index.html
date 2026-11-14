@@ -5,56 +5,79 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comptabilité de l'association</title>
 <style>
-  :root { --bg:#0f0b1a; --card:#1a1428; --line:#2d2444; --txt:#eae6f5; --mute:#8f86a8; --acc:#8b5cf6; --ok:#34d399; --ko:#f87171; }
+  :root { --bg:#0f0b1a; --card:#1a1428; --card2:#201833; --line:#2d2444; --txt:#eae6f5; --mute:#8f86a8; --acc:#8b5cf6; --ok:#4ade80; --ko:#fb7185; }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 system-ui,sans-serif; padding:20px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 system-ui,sans-serif; padding:24px 20px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
   h1 { font-size:22px; margin:0 0 4px; }
-  input, select, button { font:inherit; color:var(--txt); background:#120d20; border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
-  input:focus, select:focus { outline:2px solid var(--acc); }
+  h2 { font-size:13px; font-weight:600; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; margin:0 0 12px; }
+  input, select, button { font:inherit; color:var(--txt); background:#120d20; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  input:focus, select:focus { outline:2px solid var(--acc); border-color:transparent; }
   button { cursor:pointer; background:var(--acc); border:0; font-weight:600; }
   button:hover { filter:brightness(1.1); }
   button:disabled { opacity:.5; cursor:wait; }
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--mute); font-weight:400; }
+  button.ghost:hover { color:var(--txt); }
   #login { max-width:340px; margin:12vh auto; display:grid; gap:10px; }
   #login p { margin:0 0 6px; color:var(--mute); font-size:13px; }
   #erreur { color:var(--ko); font-size:13px; min-height:18px; }
-  #app { max-width:1100px; margin:auto; }
-  .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  #app { max-width:1100px; margin:auto; display:grid; gap:16px; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
   .hide { display:none !important; }
 
-  .resume { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
-  .resume .card { flex:1; min-width:150px; padding:16px; }
-  .resume .op { align-self:center; font-size:26px; color:var(--mute); }
+  .resume { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; }
+  .resume .card { flex:1; min-width:150px; padding:16px 18px; }
+  .resume .op { align-self:center; font-size:24px; color:var(--mute); }
   .resume small { color:var(--mute); }
-  .resume b { display:block; font-size:26px; margin-top:2px; font-variant-numeric:tabular-nums; }
-  .resume .total { border-color:var(--acc); }
+  .resume b { display:block; font-size:27px; margin-top:2px; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+  .resume .total { border-color:var(--acc); background:linear-gradient(135deg,#1f1636,var(--card)); }
   .alerte { color:var(--ko); font-size:12px; min-height:18px; }
 
-  #formAjout { display:grid; grid-template-columns:140px 1fr 150px 140px 130px auto; gap:8px; margin-bottom:6px; }
-  #modeEdition { color:var(--acc); font-size:13px; min-height:20px; margin-bottom:12px; display:flex; gap:10px; align-items:center; }
+  #formAjout { display:grid; grid-template-columns:140px 1fr 150px 140px 130px auto; gap:8px; }
+  #modeEdition { color:var(--acc); font-size:13px; display:flex; gap:10px; align-items:center; margin-top:10px; }
+  #modeEdition:empty { display:none; }
+
+  /* NOUVEAU : barre de recherche */
+  .recherche { position:relative; margin-bottom:8px; }
+  .recherche input { width:100%; padding:13px 44px 13px 42px; font-size:16px; border-radius:12px; }
+  .recherche .loupe { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--mute); pointer-events:none; }
+  #btnEffacer { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; color:var(--mute); padding:4px 9px; font-weight:400; }
+  #infos { color:var(--mute); font-size:13px; margin:0 2px 10px; min-height:20px; }
+  #infos b { color:var(--txt); font-weight:600; }
+
   .scroll { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; }
-  th, td { padding:10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
-  th { color:var(--mute); font-weight:500; font-size:13px; }
+  th, td { padding:11px 12px; text-align:left; white-space:nowrap; }
+  th { color:var(--mute); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--line); }
+  tr.ligne td { border-bottom:1px solid #251d3a; }
+  tr.ligne:hover td { background:var(--card2); }
+  tr.enEdition td { background:#2a1f45; }
   .n { text-align:right; font-variant-numeric:tabular-nums; }
-  td.designation { white-space:normal; }
+  td.designation { white-space:normal; min-width:180px; }
   .recette { color:var(--ok); } .depense { color:var(--ko); }
-  .tag { background:#241b3a; border-radius:6px; padding:2px 8px; font-size:12px; }
-  tr.enEdition { background:#241b3a; }
 
-  /* NOUVEAU : boutons ✎ et 🗑 discrets dans chaque ligne */
-  td.actions { text-align:right; }
-  td.actions button { background:none; border:0; color:var(--mute); padding:2px 7px; font-weight:400; font-size:15px; }
-  td.actions button:hover { color:var(--txt); filter:none; }
+  /* NOUVEAU : séparateur de mois */
+  tr.mois td { padding:20px 12px 6px; border-bottom:1px solid var(--line); }
+  tr.mois span { font-weight:600; text-transform:capitalize; }
+  tr.mois small { color:var(--mute); margin-left:12px; font-weight:400; }
 
-  dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:14px; padding:22px; width:min(380px,92vw); }
+  /* NOUVEAU : mode de règlement avec pastille de couleur */
+  .tag { display:inline-flex; align-items:center; gap:6px; background:#241b3a; border-radius:20px; padding:2px 10px 2px 8px; font-size:12px; }
+  .tag::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--c); }
+  .m-cb { --c:#a78bfa; } .m-especes { --c:#fbbf24; } .m-cheque { --c:#38bdf8; } .m-virement { --c:#2dd4bf; }
+
+  td.actions { text-align:right; opacity:.35; transition:opacity .15s; }
+  tr.ligne:hover td.actions { opacity:1; }
+  td.actions button { background:none; border:0; color:var(--txt); padding:2px 7px; font-weight:400; font-size:15px; }
+  td.vide { color:var(--mute); text-align:center; padding:36px; }
+
+  dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:16px; padding:22px; width:min(380px,92vw); }
   dialog::backdrop { background:rgba(0,0,0,.6); }
   dialog label { display:block; margin:12px 0 4px; color:var(--mute); font-size:13px; }
   dialog input { width:100%; }
   dialog .btns { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
 
-  @media (max-width:800px) { #formAjout { grid-template-columns:1fr 1fr; } #formAjout input[name=designation] { grid-column:1/-1; } }
+  @media (max-width:800px) { #formAjout { grid-template-columns:1fr 1fr; } #formAjout input[name=designation] { grid-column:1/-1; } td.actions { opacity:1; } }
 </style>
 </head>
 <body>
@@ -86,6 +109,7 @@
   </div>
 
   <div class="card">
+    <h2>Nouvelle écriture</h2>
     <form id="formAjout">
       <input name="date" type="date" required>
       <input name="designation" placeholder="Désignation (raison)" maxlength="120" required>
@@ -102,13 +126,21 @@
       <input name="montant" type="number" step="0.01" min="0.01" placeholder="Montant €" required>
       <button type="submit" id="btnValider">Ajouter</button>
     </form>
-    <!-- NOUVEAU : bandeau affiché pendant une modification -->
     <div id="modeEdition"></div>
+  </div>
 
+  <div class="card">
+    <h2>Écritures</h2>
+    <div class="recherche">
+      <span class="loupe">🔍</span>
+      <input id="recherche" type="search" placeholder="Rechercher une raison ou un montant…   (touche /)" autocomplete="off">
+      <button type="button" id="btnEffacer" class="hide" title="Effacer">✕</button>
+    </div>
+    <div id="infos"></div>
     <div class="scroll">
       <table>
         <thead>
-          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette (+)</th><th class="n">Dépense (−)</th><th class="n">Solde</th><th></th></tr>
+          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette</th><th class="n">Dépense</th><th class="n" title="Solde total après cette écriture">Solde</th><th></th></tr>
         </thead>
         <tbody id="lignes"></tbody>
       </table>
@@ -135,7 +167,6 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  // NOUVEAU : updateDoc (modifier) et deleteDoc (supprimer)
   import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -157,12 +188,13 @@
   const $ = id => document.getElementById(id);
   const NOMS_MODES = { cb: "CB", especes: "Espèces", cheque: "Chèque", virement: "Virement" };
   const euros = centimes => (centimes / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
-  const dateFr = iso => iso.split("-").reverse().join("/");   // "2026-11-14" → "14/11/2026"
+  const dateFr = iso => iso.split("-").reverse().join("/");
+  const echapper = s => s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 
   let ecritures = [];
   let depart = { caisseCts: 0, banqueCts: 0 };
   let arreterEcoutes = [];
-  let idEnEdition = null;   // NOUVEAU : null = on ajoute ; sinon = l'id de l'écriture qu'on modifie
+  let idEnEdition = null;
 
   // ---------- CONNEXION ----------
   onAuthStateChanged(auth, utilisateur => {
@@ -171,12 +203,10 @@
     arreterEcoutes.forEach(stop => stop()); arreterEcoutes = [];
     if (!utilisateur) { ecritures = []; sortirDeLEdition(); return; }
     $("qui").textContent = utilisateur.email;
-
     arreterEcoutes.push(onSnapshot(ecrituresRef, res => {
       ecritures = res.docs.map(d => ({ id: d.id, ...d.data() }));
       afficher();
     }, err => console.error("Lecture écritures refusée :", err)));
-
     arreterEcoutes.push(onSnapshot(departRef, d => {
       depart = d.exists() ? d.data() : { caisseCts: 0, banqueCts: 0 };
       afficher();
@@ -191,7 +221,7 @@
   });
   $("btnSortir").addEventListener("click", () => signOut(auth));
 
-  // ---------- AJOUT OU MODIFICATION (même formulaire) ----------
+  // ---------- AJOUT OU MODIFICATION ----------
   $("formAjout").addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.target;
@@ -203,18 +233,16 @@
       type: f.get("type"),
       montantCts: Math.round(parseFloat(f.get("montant")) * 100)
     };
-    $("btnValider").disabled = true;   // NOUVEAU : évite le double clic = écriture en double
+    $("btnValider").disabled = true;
     try {
       if (idEnEdition) {
-        // MODIFICATION : on change les champs + on note QUI a modifié et QUAND
         await updateDoc(doc(db, "ecritures", idEnEdition),
           { ...donnees, modifiePar: auth.currentUser.email, modifieLe: serverTimestamp() });
         sortirDeLEdition();
       } else {
-        // AJOUT : on note QUI a saisi
         await addDoc(ecrituresRef, { ...donnees, creeLe: serverTimestamp(), creePar: auth.currentUser.email });
         form.reset();
-        form.date.value = donnees.date;   // on garde la date pour saisir à la chaîne
+        form.date.value = donnees.date;
         form.designation.focus();
       }
     } catch (err) {
@@ -224,9 +252,7 @@
     $("btnValider").disabled = false;
   });
 
-  // ---------- CLICS SUR ✎ ET 🗑 ----------
-  // Les lignes sont recréées à chaque affichage. On met donc UN seul écouteur sur le tableau entier
-  // ("délégation d'événements") au lieu d'un par bouton : sinon il faudrait les reposer à chaque fois.
+  // ---------- CLICS SUR ✎ ET 🗑 (un seul écouteur sur le tableau) ----------
   $("lignes").addEventListener("click", async e => {
     const bouton = e.target.closest("button");
     if (!bouton) return;
@@ -281,45 +307,98 @@
     });
   });
 
+  // ---------- NOUVEAU : RECHERCHE ----------
+  // Enlève les accents et les majuscules : "Café" devient "cafe", donc "cafe" le trouve.
+  const normaliser = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  function filtrer(lignes) {
+    // On découpe la recherche en mots : "tombola 50" → ["tombola", "50"]
+    const mots = normaliser($("recherche").value.replace(/€/g, "")).split(/\s+/).filter(Boolean);
+    if (!mots.length) return lignes;
+    return lignes.filter(l => {
+      const designation = normaliser(l.designation);
+      const montant = (l.montantCts / 100).toFixed(2);   // "12.50"
+      const montantBrut = montant.replace(".", "");       // "1250"
+      // Chaque mot doit être trouvé quelque part : dans la raison OU dans le montant
+      return mots.every(m => designation.includes(m) || montant.includes(m.replace(",", ".")) || montantBrut.includes(m));
+    });
+  }
+
+  $("recherche").addEventListener("input", afficher);
+  $("btnEffacer").addEventListener("click", () => { $("recherche").value = ""; afficher(); $("recherche").focus(); });
+  // Raccourci : la touche "/" place le curseur dans la recherche (sauf si on est déjà en train de taper)
+  document.addEventListener("keydown", e => {
+    if (e.key === "/" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+      e.preventDefault(); $("recherche").focus();
+    }
+  });
+
   // ---------- AFFICHAGE ----------
   function afficher() {
     const triees = [...ecritures].sort((a, b) =>
       a.date.localeCompare(b.date) || (a.creeLe?.seconds ?? 0) - (b.creeLe?.seconds ?? 0));
 
+    // 1) Les soldes sont calculés sur TOUTES les écritures (sinon ils seraient faux dès qu'on filtre)
     let caisse = depart.caisseCts || 0;
     let banque = depart.banqueCts || 0;
-
-    $("lignes").innerHTML = triees.map(l => {
+    const avecSolde = triees.map(l => {
       const signe = l.type === "recette" ? 1 : -1;
-      if (l.mode === "especes") caisse += signe * l.montantCts;
-      else banque += signe * l.montantCts;
+      if (l.mode === "especes") caisse += signe * l.montantCts; else banque += signe * l.montantCts;
+      return { ...l, solde: caisse + banque };
+    });
 
-      // NOUVEAU : infobulle (survol de la ligne) = qui a saisi / modifié
+    // 2) PUIS on filtre pour l'affichage
+    const vues = filtrer(avecSolde);
+
+    // Totaux par mois et total général, sur les lignes affichées
+    const parMois = {};
+    let recettes = 0, depenses = 0;
+    vues.forEach(l => {
+      const cle = l.date.slice(0, 7);
+      parMois[cle] ??= { rec: 0, dep: 0 };
+      if (l.type === "recette") { parMois[cle].rec += l.montantCts; recettes += l.montantCts; }
+      else { parMois[cle].dep += l.montantCts; depenses += l.montantCts; }
+    });
+
+    let moisPrecedent = "";
+    $("lignes").innerHTML = vues.map(l => {
+      let entete = "";
+      const cle = l.date.slice(0, 7);
+      if (cle !== moisPrecedent) {
+        moisPrecedent = cle;
+        const [a, m] = cle.split("-");
+        const nomMois = new Date(a, m - 1, 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+        entete = `<tr class="mois"><td colspan="7"><span>${nomMois}</span><small>+${euros(parMois[cle].rec)} · −${euros(parMois[cle].dep)}</small></td></tr>`;
+      }
       let trace = l.creePar ? `Saisi par ${l.creePar}` : "";
       if (l.modifiePar) trace += ` — modifié par ${l.modifiePar}`;
-
-      return `<tr class="${l.id === idEnEdition ? "enEdition" : ""}" title="${echapper(trace)}">
+      return entete + `<tr class="ligne ${l.id === idEnEdition ? "enEdition" : ""}" title="${echapper(trace)}">
         <td>${dateFr(l.date)}</td>
         <td class="designation">${echapper(l.designation)}</td>
-        <td><span class="tag">${NOMS_MODES[l.mode]}</span></td>
-        <td class="n recette">${l.type === "recette" ? euros(l.montantCts) : ""}</td>
-        <td class="n depense">${l.type === "depense" ? euros(l.montantCts) : ""}</td>
-        <td class="n"><b>${euros(caisse + banque)}</b></td>
+        <td><span class="tag m-${l.mode}">${NOMS_MODES[l.mode]}</span></td>
+        <td class="n recette">${l.type === "recette" ? "+ " + euros(l.montantCts) : ""}</td>
+        <td class="n depense">${l.type === "depense" ? "− " + euros(l.montantCts) : ""}</td>
+        <td class="n"><b>${euros(l.solde)}</b></td>
         <td class="actions">
           <button data-action="modifier" data-id="${l.id}" title="Modifier">✎</button>
           <button data-action="supprimer" data-id="${l.id}" title="Supprimer">🗑</button>
         </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="7" style="color:var(--mute);text-align:center;padding:24px">Aucune écriture pour l'instant.</td></tr>`;
+    }).join("") || `<tr><td colspan="7" class="vide">${$("recherche").value ? "Aucun résultat pour « " + echapper($("recherche").value) + " »" : "Aucune écriture pour l'instant."}</td></tr>`;
 
+    // Ligne d'information sous la barre : utile pour "combien a-t-on dépensé en essence ?"
+    $("btnEffacer").classList.toggle("hide", !$("recherche").value);
+    $("infos").innerHTML = ecritures.length
+      ? `<b>${vues.length}</b> ${$("recherche").value ? `résultat${vues.length > 1 ? "s" : ""} sur ${ecritures.length}` : `écriture${vues.length > 1 ? "s" : ""}`} · <span class="recette">+${euros(recettes)}</span> · <span class="depense">−${euros(depenses)}</span>`
+      : "";
+
+    // Cartes du haut : toujours la situation réelle, jamais filtrée
     $("sCaisse").textContent = euros(caisse);
     $("sBanque").textContent = euros(banque);
     $("sTotal").textContent = euros(caisse + banque);
     $("sCaisse").style.color = caisse < 0 ? "var(--ko)" : "";
     $("alerteCaisse").textContent = caisse < 0 ? "⚠ Caisse négative : vérifie les écritures en espèces" : "";
   }
-
-  const echapper = s => s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 </script>
 </body>
 </html>
