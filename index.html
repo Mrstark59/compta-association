@@ -14,6 +14,7 @@
   input:focus, select:focus { outline:2px solid var(--acc); }
   button { cursor:pointer; background:var(--acc); border:0; font-weight:600; }
   button:hover { filter:brightness(1.1); }
+  button:disabled { opacity:.5; cursor:wait; }
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--mute); font-weight:400; }
   #login { max-width:340px; margin:12vh auto; display:grid; gap:10px; }
   #login p { margin:0 0 6px; color:var(--mute); font-size:13px; }
@@ -22,7 +23,6 @@
   .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .hide { display:none !important; }
 
-  /* NOUVEAU : le résumé  [Espèces] + [Banque] = [Total] */
   .resume { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .resume .card { flex:1; min-width:150px; padding:16px; }
   .resume .op { align-self:center; font-size:26px; color:var(--mute); }
@@ -31,7 +31,8 @@
   .resume .total { border-color:var(--acc); }
   .alerte { color:var(--ko); font-size:12px; min-height:18px; }
 
-  #formAjout { display:grid; grid-template-columns:140px 1fr 150px 140px 130px auto; gap:8px; margin-bottom:18px; }
+  #formAjout { display:grid; grid-template-columns:140px 1fr 150px 140px 130px auto; gap:8px; margin-bottom:6px; }
+  #modeEdition { color:var(--acc); font-size:13px; min-height:20px; margin-bottom:12px; display:flex; gap:10px; align-items:center; }
   .scroll { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; }
   th, td { padding:10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
@@ -40,8 +41,13 @@
   td.designation { white-space:normal; }
   .recette { color:var(--ok); } .depense { color:var(--ko); }
   .tag { background:#241b3a; border-radius:6px; padding:2px 8px; font-size:12px; }
+  tr.enEdition { background:#241b3a; }
 
-  /* NOUVEAU : fenêtre "soldes de départ" (balise <dialog>, native) */
+  /* NOUVEAU : boutons ✎ et 🗑 discrets dans chaque ligne */
+  td.actions { text-align:right; }
+  td.actions button { background:none; border:0; color:var(--mute); padding:2px 7px; font-weight:400; font-size:15px; }
+  td.actions button:hover { color:var(--txt); filter:none; }
+
   dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:14px; padding:22px; width:min(380px,92vw); }
   dialog::backdrop { background:rgba(0,0,0,.6); }
   dialog label { display:block; margin:12px 0 4px; color:var(--mute); font-size:13px; }
@@ -71,7 +77,6 @@
     </div>
   </div>
 
-  <!-- NOUVEAU : résumé -->
   <div class="resume">
     <div class="card"><small>Caisse (espèces)</small><b id="sCaisse">0,00 €</b><div class="alerte" id="alerteCaisse"></div></div>
     <div class="op">+</div>
@@ -95,13 +100,15 @@
         <option value="depense">Dépense (−)</option>
       </select>
       <input name="montant" type="number" step="0.01" min="0.01" placeholder="Montant €" required>
-      <button type="submit">Ajouter</button>
+      <button type="submit" id="btnValider">Ajouter</button>
     </form>
+    <!-- NOUVEAU : bandeau affiché pendant une modification -->
+    <div id="modeEdition"></div>
 
     <div class="scroll">
       <table>
         <thead>
-          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette (+)</th><th class="n">Dépense (−)</th><th class="n">Solde</th></tr>
+          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette (+)</th><th class="n">Dépense (−)</th><th class="n">Solde</th><th></th></tr>
         </thead>
         <tbody id="lignes"></tbody>
       </table>
@@ -109,7 +116,6 @@
   </div>
 </div>
 
-<!-- NOUVEAU : fenêtre des soldes de départ -->
 <dialog id="dlgDepart">
   <form id="formDepart" method="dialog">
     <h1 style="font-size:18px">Soldes de départ</h1>
@@ -129,8 +135,8 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  // NOUVEAU : doc + setDoc pour lire/écrire UN document précis (les soldes de départ)
-  import { getFirestore, collection, doc, addDoc, setDoc, onSnapshot, serverTimestamp }
+  // NOUVEAU : updateDoc (modifier) et deleteDoc (supprimer)
+  import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -146,22 +152,24 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
   const ecrituresRef = collection(db, "ecritures");
-  const departRef = doc(db, "config", "depart");   // NOUVEAU : un seul document "config/depart" pour les soldes de départ
+  const departRef = doc(db, "config", "depart");
 
   const $ = id => document.getElementById(id);
   const NOMS_MODES = { cb: "CB", especes: "Espèces", cheque: "Chèque", virement: "Virement" };
   const euros = centimes => (centimes / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+  const dateFr = iso => iso.split("-").reverse().join("/");   // "2026-11-14" → "14/11/2026"
 
   let ecritures = [];
-  let depart = { caisseCts: 0, banqueCts: 0 };   // NOUVEAU
+  let depart = { caisseCts: 0, banqueCts: 0 };
   let arreterEcoutes = [];
+  let idEnEdition = null;   // NOUVEAU : null = on ajoute ; sinon = l'id de l'écriture qu'on modifie
 
   // ---------- CONNEXION ----------
   onAuthStateChanged(auth, utilisateur => {
     $("login").classList.toggle("hide", !!utilisateur);
     $("app").classList.toggle("hide", !utilisateur);
     arreterEcoutes.forEach(stop => stop()); arreterEcoutes = [];
-    if (!utilisateur) { ecritures = []; return; }
+    if (!utilisateur) { ecritures = []; sortirDeLEdition(); return; }
     $("qui").textContent = utilisateur.email;
 
     arreterEcoutes.push(onSnapshot(ecrituresRef, res => {
@@ -169,7 +177,6 @@
       afficher();
     }, err => console.error("Lecture écritures refusée :", err)));
 
-    // NOUVEAU : on écoute aussi les soldes de départ
     arreterEcoutes.push(onSnapshot(departRef, d => {
       depart = d.exists() ? d.data() : { caisseCts: 0, banqueCts: 0 };
       afficher();
@@ -184,27 +191,85 @@
   });
   $("btnSortir").addEventListener("click", () => signOut(auth));
 
-  // ---------- AJOUT ----------
+  // ---------- AJOUT OU MODIFICATION (même formulaire) ----------
   $("formAjout").addEventListener("submit", async e => {
     e.preventDefault();
-    const f = new FormData(e.target);
-    await addDoc(ecrituresRef, {
+    const form = e.target;
+    const f = new FormData(form);
+    const donnees = {
       date: f.get("date"),
       designation: f.get("designation").trim(),
       mode: f.get("mode"),
       type: f.get("type"),
-      montantCts: Math.round(parseFloat(f.get("montant")) * 100),
-      creeLe: serverTimestamp()
-    });
-    const date = f.get("date");
-    e.target.reset();
-    e.target.date.value = date;
-    e.target.designation.focus();
+      montantCts: Math.round(parseFloat(f.get("montant")) * 100)
+    };
+    $("btnValider").disabled = true;   // NOUVEAU : évite le double clic = écriture en double
+    try {
+      if (idEnEdition) {
+        // MODIFICATION : on change les champs + on note QUI a modifié et QUAND
+        await updateDoc(doc(db, "ecritures", idEnEdition),
+          { ...donnees, modifiePar: auth.currentUser.email, modifieLe: serverTimestamp() });
+        sortirDeLEdition();
+      } else {
+        // AJOUT : on note QUI a saisi
+        await addDoc(ecrituresRef, { ...donnees, creeLe: serverTimestamp(), creePar: auth.currentUser.email });
+        form.reset();
+        form.date.value = donnees.date;   // on garde la date pour saisir à la chaîne
+        form.designation.focus();
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Enregistrement impossible (voir la console, F12). Rien n'a été modifié.");
+    }
+    $("btnValider").disabled = false;
   });
 
-  // ---------- SOLDES DE DÉPART (NOUVEAU) ----------
+  // ---------- CLICS SUR ✎ ET 🗑 ----------
+  // Les lignes sont recréées à chaque affichage. On met donc UN seul écouteur sur le tableau entier
+  // ("délégation d'événements") au lieu d'un par bouton : sinon il faudrait les reposer à chaque fois.
+  $("lignes").addEventListener("click", async e => {
+    const bouton = e.target.closest("button");
+    if (!bouton) return;
+    const ecriture = ecritures.find(x => x.id === bouton.dataset.id);
+    if (!ecriture) return;
+
+    if (bouton.dataset.action === "modifier") {
+      idEnEdition = ecriture.id;
+      const form = $("formAjout");
+      form.date.value = ecriture.date;
+      form.designation.value = ecriture.designation;
+      form.mode.value = ecriture.mode;
+      form.type.value = ecriture.type;
+      form.montant.value = ecriture.montantCts / 100;
+      $("btnValider").textContent = "Enregistrer";
+      $("modeEdition").innerHTML = `✎ Modification de « ${echapper(ecriture.designation)} » <button type="button" class="ghost" id="btnAnnulerEdition">Annuler</button>`;
+      $("btnAnnulerEdition").addEventListener("click", sortirDeLEdition);
+      afficher();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      form.designation.focus();
+    }
+
+    if (bouton.dataset.action === "supprimer") {
+      const detail = `${dateFr(ecriture.date)} — ${ecriture.designation}\n${ecriture.type === "recette" ? "+" : "−"}${euros(ecriture.montantCts)} (${NOMS_MODES[ecriture.mode]})`;
+      if (!confirm(`Supprimer définitivement cette écriture ?\n\n${detail}\n\nCette action est irréversible.`)) return;
+      try {
+        await deleteDoc(doc(db, "ecritures", ecriture.id));
+        if (idEnEdition === ecriture.id) sortirDeLEdition();
+      } catch (err) { console.error(err); alert("Suppression impossible (voir la console, F12)."); }
+    }
+  });
+
+  function sortirDeLEdition() {
+    idEnEdition = null;
+    $("formAjout").reset();
+    $("btnValider").textContent = "Ajouter";
+    $("modeEdition").innerHTML = "";
+    afficher();
+  }
+
+  // ---------- SOLDES DE DÉPART ----------
   $("btnDepart").addEventListener("click", () => {
-    $("dCaisse").value = depart.caisseCts / 100;   // on repasse des centimes aux euros pour l'affichage
+    $("dCaisse").value = depart.caisseCts / 100;
     $("dBanque").value = depart.banqueCts / 100;
     $("dlgDepart").showModal();
   });
@@ -221,32 +286,35 @@
     const triees = [...ecritures].sort((a, b) =>
       a.date.localeCompare(b.date) || (a.creeLe?.seconds ?? 0) - (b.creeLe?.seconds ?? 0));
 
-    // NOUVEAU : on suit DEUX compteurs en parallèle, au lieu d'un seul
     let caisse = depart.caisseCts || 0;
     let banque = depart.banqueCts || 0;
 
     $("lignes").innerHTML = triees.map(l => {
       const signe = l.type === "recette" ? 1 : -1;
-      // Espèces → caisse. Tout le reste (CB, chèque, virement) → banque.
       if (l.mode === "especes") caisse += signe * l.montantCts;
       else banque += signe * l.montantCts;
 
-      const [a, m, j] = l.date.split("-");
-      return `<tr>
-        <td>${j}/${m}/${a}</td>
+      // NOUVEAU : infobulle (survol de la ligne) = qui a saisi / modifié
+      let trace = l.creePar ? `Saisi par ${l.creePar}` : "";
+      if (l.modifiePar) trace += ` — modifié par ${l.modifiePar}`;
+
+      return `<tr class="${l.id === idEnEdition ? "enEdition" : ""}" title="${echapper(trace)}">
+        <td>${dateFr(l.date)}</td>
         <td class="designation">${echapper(l.designation)}</td>
         <td><span class="tag">${NOMS_MODES[l.mode]}</span></td>
         <td class="n recette">${l.type === "recette" ? euros(l.montantCts) : ""}</td>
         <td class="n depense">${l.type === "depense" ? euros(l.montantCts) : ""}</td>
         <td class="n"><b>${euros(caisse + banque)}</b></td>
+        <td class="actions">
+          <button data-action="modifier" data-id="${l.id}" title="Modifier">✎</button>
+          <button data-action="supprimer" data-id="${l.id}" title="Supprimer">🗑</button>
+        </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="6" style="color:var(--mute);text-align:center;padding:24px">Aucune écriture pour l'instant.</td></tr>`;
+    }).join("") || `<tr><td colspan="7" style="color:var(--mute);text-align:center;padding:24px">Aucune écriture pour l'instant.</td></tr>`;
 
-    // À la fin de la boucle, caisse et banque contiennent les soldes ACTUELS
     $("sCaisse").textContent = euros(caisse);
     $("sBanque").textContent = euros(banque);
     $("sTotal").textContent = euros(caisse + banque);
-    // Une caisse en espèces ne peut pas être négative : si c'est le cas, c'est une erreur de saisie
     $("sCaisse").style.color = caisse < 0 ? "var(--ko)" : "";
     $("alerteCaisse").textContent = caisse < 0 ? "⚠ Caisse négative : vérifie les écritures en espèces" : "";
   }
