@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comptabilité de l'association</title>
+<style>
+  :root { --bg:#0f0b1a; --card:#1a1428; --line:#2d2444; --txt:#eae6f5; --mute:#8f86a8; --acc:#8b5cf6; --ko:#f87171; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 system-ui,sans-serif; padding:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  input, button { font:inherit; color:var(--txt); background:#120d20; border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
+  input:focus { outline:2px solid var(--acc); }
+  button { cursor:pointer; background:var(--acc); border:0; font-weight:600; }
+  button:hover { filter:brightness(1.1); }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--mute); font-weight:400; }
+  #login { max-width:340px; margin:12vh auto; display:grid; gap:10px; }
+  #login p { margin:0 0 6px; color:var(--mute); font-size:13px; }
+  #erreur { color:var(--ko); font-size:13px; min-height:18px; }
+  #app { max-width:1100px; margin:auto; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .hide { display:none !important; }
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN 1 : connexion (visible si personne n'est connecté) -->
+<form id="login" class="card hide">
+  <div>
+    <h1>Comptabilité</h1>
+    <p>Accès réservé aux membres.</p>
+  </div>
+  <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+  <input id="mdp" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
+  <button type="submit">Se connecter</button>
+  <div id="erreur"></div>
+</form>
+
+<!-- ÉCRAN 2 : application (visible si connecté). Vide pour l'instant, on le remplit aux étapes suivantes -->
+<div id="app" class="hide">
+  <div class="top">
+    <h1>Comptabilité de l'association</h1>
+    <div><span id="qui" style="color:var(--mute);margin-right:10px"></span><button class="ghost" id="btnSortir">Déconnexion</button></div>
+  </div>
+  <p style="color:var(--mute)">✅ Connexion OK. Ici viendra le tableau.</p>
+</div>
+
+<script type="module">
+  // 1) On charge Firebase depuis une URL (pas besoin de npm)
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  // 2) Ta config (même chose que dans la console Firebase)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDFaVObQHuck-Sov9MEinivmLfvy59SE1A",
+    authDomain: "compta-association-dbd22.firebaseapp.com",
+    projectId: "compta-association-dbd22",
+    storageBucket: "compta-association-dbd22.firebasestorage.app",
+    messagingSenderId: "35641159683",
+    appId: "1:35641159683:web:500fe151f25bc491829e36"
+  };
+
+  // 3) On démarre Firebase et on récupère le service d'authentification
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  const $ = id => document.getElementById(id); // raccourci : $("email") = document.getElementById("email")
+
+  // 4) Firebase nous PRÉVIENT à chaque changement : connecté / déconnecté (même au rechargement de la page)
+  onAuthStateChanged(auth, utilisateur => {
+    $("login").classList.toggle("hide", !!utilisateur); // connecté → on cache le formulaire
+    $("app").classList.toggle("hide", !utilisateur);    // connecté → on montre l'appli
+    if (utilisateur) $("qui").textContent = utilisateur.email;
+  });
+
+  // 5) Clic sur "Se connecter"
+  $("login").addEventListener("submit", async evenement => {
+    evenement.preventDefault(); // empêche la page de se recharger
+    $("erreur").textContent = "";
+    try {
+      await signInWithEmailAndPassword(auth, $("email").value, $("mdp").value);
+    } catch (e) {
+      console.error(e); // ouvre la console (F12) pour voir le vrai code d'erreur
+      $("erreur").textContent = "Email ou mot de passe incorrect.";
+    }
+  });
+
+  // 6) Clic sur "Déconnexion"
+  $("btnSortir").addEventListener("click", () => signOut(auth));
+</script>
+</body>
+</html>
