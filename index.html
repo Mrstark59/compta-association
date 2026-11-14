@@ -22,7 +22,15 @@
   .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .hide { display:none !important; }
 
-  /* Formulaire : 6 colonnes sur grand écran, 2 sur mobile */
+  /* NOUVEAU : le résumé  [Espèces] + [Banque] = [Total] */
+  .resume { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .resume .card { flex:1; min-width:150px; padding:16px; }
+  .resume .op { align-self:center; font-size:26px; color:var(--mute); }
+  .resume small { color:var(--mute); }
+  .resume b { display:block; font-size:26px; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .resume .total { border-color:var(--acc); }
+  .alerte { color:var(--ko); font-size:12px; min-height:18px; }
+
   #formAjout { display:grid; grid-template-columns:140px 1fr 150px 140px 130px auto; gap:8px; margin-bottom:18px; }
   .scroll { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; }
@@ -32,6 +40,14 @@
   td.designation { white-space:normal; }
   .recette { color:var(--ok); } .depense { color:var(--ko); }
   .tag { background:#241b3a; border-radius:6px; padding:2px 8px; font-size:12px; }
+
+  /* NOUVEAU : fenêtre "soldes de départ" (balise <dialog>, native) */
+  dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:14px; padding:22px; width:min(380px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  dialog label { display:block; margin:12px 0 4px; color:var(--mute); font-size:13px; }
+  dialog input { width:100%; }
+  dialog .btns { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+
   @media (max-width:800px) { #formAjout { grid-template-columns:1fr 1fr; } #formAjout input[name=designation] { grid-column:1/-1; } }
 </style>
 </head>
@@ -48,11 +64,23 @@
 <div id="app" class="hide">
   <div class="top">
     <h1>Comptabilité de l'association</h1>
-    <div><span id="qui" style="color:var(--mute);margin-right:10px"></span><button class="ghost" id="btnSortir">Déconnexion</button></div>
+    <div>
+      <span id="qui" style="color:var(--mute);margin-right:10px"></span>
+      <button class="ghost" id="btnDepart">Soldes de départ</button>
+      <button class="ghost" id="btnSortir">Déconnexion</button>
+    </div>
+  </div>
+
+  <!-- NOUVEAU : résumé -->
+  <div class="resume">
+    <div class="card"><small>Caisse (espèces)</small><b id="sCaisse">0,00 €</b><div class="alerte" id="alerteCaisse"></div></div>
+    <div class="op">+</div>
+    <div class="card"><small>Banque (CB, chèque, virement)</small><b id="sBanque">0,00 €</b></div>
+    <div class="op">=</div>
+    <div class="card total"><small>Solde total</small><b id="sTotal">0,00 €</b></div>
   </div>
 
   <div class="card">
-    <!-- FORMULAIRE D'AJOUT -->
     <form id="formAjout">
       <input name="date" type="date" required>
       <input name="designation" placeholder="Désignation (raison)" maxlength="120" required>
@@ -70,7 +98,6 @@
       <button type="submit">Ajouter</button>
     </form>
 
-    <!-- TABLEAU -->
     <div class="scroll">
       <table>
         <thead>
@@ -82,12 +109,28 @@
   </div>
 </div>
 
+<!-- NOUVEAU : fenêtre des soldes de départ -->
+<dialog id="dlgDepart">
+  <form id="formDepart" method="dialog">
+    <h1 style="font-size:18px">Soldes de départ</h1>
+    <p style="color:var(--mute);font-size:13px;margin:6px 0 0">Ce qu'il y avait en caisse et en banque <b>avant</b> la première écriture saisie.</p>
+    <label for="dCaisse">Caisse espèces (€)</label>
+    <input id="dCaisse" type="number" step="0.01" required>
+    <label for="dBanque">Banque (€)</label>
+    <input id="dBanque" type="number" step="0.01" required>
+    <div class="btns">
+      <button type="button" class="ghost" id="dAnnuler">Annuler</button>
+      <button type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  // NOUVEAU : Firestore (la base de données)
-  import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp }
+  // NOUVEAU : doc + setDoc pour lire/écrire UN document précis (les soldes de départ)
+  import { getFirestore, collection, doc, addDoc, setDoc, onSnapshot, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -101,33 +144,36 @@
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db = getFirestore(app);                       // NOUVEAU : accès à la base
-  const ecrituresRef = collection(db, "ecritures");   // NOUVEAU : le "classeur" qui contiendra toutes les écritures
+  const db = getFirestore(app);
+  const ecrituresRef = collection(db, "ecritures");
+  const departRef = doc(db, "config", "depart");   // NOUVEAU : un seul document "config/depart" pour les soldes de départ
 
   const $ = id => document.getElementById(id);
   const NOMS_MODES = { cb: "CB", especes: "Espèces", cheque: "Chèque", virement: "Virement" };
   const euros = centimes => (centimes / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 
-  let ecritures = [];     // la liste de TOUTES les écritures, telle que Firestore nous l'envoie
-  let arreterEcoute = null; // pour arrêter l'écoute à la déconnexion
+  let ecritures = [];
+  let depart = { caisseCts: 0, banqueCts: 0 };   // NOUVEAU
+  let arreterEcoutes = [];
 
-  // ---------- CONNEXION (inchangé) ----------
+  // ---------- CONNEXION ----------
   onAuthStateChanged(auth, utilisateur => {
     $("login").classList.toggle("hide", !!utilisateur);
     $("app").classList.toggle("hide", !utilisateur);
-    if (arreterEcoute) { arreterEcoute(); arreterEcoute = null; }
+    arreterEcoutes.forEach(stop => stop()); arreterEcoutes = [];
     if (!utilisateur) { ecritures = []; return; }
     $("qui").textContent = utilisateur.email;
 
-    // NOUVEAU : onSnapshot = "préviens-moi à chaque changement dans la base".
-    // Une écriture ajoutée depuis un autre PC apparaît ici toute seule.
-    arreterEcoute = onSnapshot(ecrituresRef,
-      resultat => {
-        ecritures = resultat.docs.map(d => ({ id: d.id, ...d.data() }));
-        afficher();
-      },
-      erreur => console.error("Lecture refusée :", erreur) // "permission denied" = problème de règles à l'étape 3
-    );
+    arreterEcoutes.push(onSnapshot(ecrituresRef, res => {
+      ecritures = res.docs.map(d => ({ id: d.id, ...d.data() }));
+      afficher();
+    }, err => console.error("Lecture écritures refusée :", err)));
+
+    // NOUVEAU : on écoute aussi les soldes de départ
+    arreterEcoutes.push(onSnapshot(departRef, d => {
+      depart = d.exists() ? d.data() : { caisseCts: 0, banqueCts: 0 };
+      afficher();
+    }, err => console.error("Lecture départ refusée :", err)));
   });
 
   $("login").addEventListener("submit", async e => {
@@ -138,34 +184,53 @@
   });
   $("btnSortir").addEventListener("click", () => signOut(auth));
 
-  // ---------- AJOUT D'UNE ÉCRITURE ----------
+  // ---------- AJOUT ----------
   $("formAjout").addEventListener("submit", async e => {
     e.preventDefault();
     const f = new FormData(e.target);
     await addDoc(ecrituresRef, {
-      date: f.get("date"),                                   // "2026-11-14" : ce format se trie bien comme du texte
+      date: f.get("date"),
       designation: f.get("designation").trim(),
       mode: f.get("mode"),
-      type: f.get("type"),                                   // "recette" ou "depense"
-      montantCts: Math.round(parseFloat(f.get("montant")) * 100), // on stocke en CENTIMES (entier), voir explication
-      creeLe: serverTimestamp()                              // heure d'enregistrement : sert à départager deux écritures du même jour
+      type: f.get("type"),
+      montantCts: Math.round(parseFloat(f.get("montant")) * 100),
+      creeLe: serverTimestamp()
     });
     const date = f.get("date");
     e.target.reset();
-    e.target.date.value = date;            // on garde la date : pratique pour saisir plusieurs lignes d'affilée
+    e.target.date.value = date;
     e.target.designation.focus();
   });
 
-  // ---------- AFFICHAGE : tri + solde cumulé ----------
+  // ---------- SOLDES DE DÉPART (NOUVEAU) ----------
+  $("btnDepart").addEventListener("click", () => {
+    $("dCaisse").value = depart.caisseCts / 100;   // on repasse des centimes aux euros pour l'affichage
+    $("dBanque").value = depart.banqueCts / 100;
+    $("dlgDepart").showModal();
+  });
+  $("dAnnuler").addEventListener("click", () => $("dlgDepart").close());
+  $("formDepart").addEventListener("submit", async () => {
+    await setDoc(departRef, {
+      caisseCts: Math.round(parseFloat($("dCaisse").value) * 100),
+      banqueCts: Math.round(parseFloat($("dBanque").value) * 100)
+    });
+  });
+
+  // ---------- AFFICHAGE ----------
   function afficher() {
-    // 1) Tri chronologique : d'abord par date, puis par heure de saisie si même jour
     const triees = [...ecritures].sort((a, b) =>
       a.date.localeCompare(b.date) || (a.creeLe?.seconds ?? 0) - (b.creeLe?.seconds ?? 0));
 
-    // 2) On parcourt de la plus ancienne à la plus récente en cumulant : c'est ça, le solde
-    let solde = 0;
+    // NOUVEAU : on suit DEUX compteurs en parallèle, au lieu d'un seul
+    let caisse = depart.caisseCts || 0;
+    let banque = depart.banqueCts || 0;
+
     $("lignes").innerHTML = triees.map(l => {
-      solde += (l.type === "recette" ? 1 : -1) * l.montantCts;
+      const signe = l.type === "recette" ? 1 : -1;
+      // Espèces → caisse. Tout le reste (CB, chèque, virement) → banque.
+      if (l.mode === "especes") caisse += signe * l.montantCts;
+      else banque += signe * l.montantCts;
+
       const [a, m, j] = l.date.split("-");
       return `<tr>
         <td>${j}/${m}/${a}</td>
@@ -173,12 +238,19 @@
         <td><span class="tag">${NOMS_MODES[l.mode]}</span></td>
         <td class="n recette">${l.type === "recette" ? euros(l.montantCts) : ""}</td>
         <td class="n depense">${l.type === "depense" ? euros(l.montantCts) : ""}</td>
-        <td class="n"><b>${euros(solde)}</b></td>
+        <td class="n"><b>${euros(caisse + banque)}</b></td>
       </tr>`;
     }).join("") || `<tr><td colspan="6" style="color:var(--mute);text-align:center;padding:24px">Aucune écriture pour l'instant.</td></tr>`;
+
+    // À la fin de la boucle, caisse et banque contiennent les soldes ACTUELS
+    $("sCaisse").textContent = euros(caisse);
+    $("sBanque").textContent = euros(banque);
+    $("sTotal").textContent = euros(caisse + banque);
+    // Une caisse en espèces ne peut pas être négative : si c'est le cas, c'est une erreur de saisie
+    $("sCaisse").style.color = caisse < 0 ? "var(--ko)" : "";
+    $("alerteCaisse").textContent = caisse < 0 ? "⚠ Caisse négative : vérifie les écritures en espèces" : "";
   }
 
-  // Sécurité : empêche qu'une désignation contenant du HTML (<script>…) soit exécutée par le navigateur
   const echapper = s => s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 </script>
 </body>
