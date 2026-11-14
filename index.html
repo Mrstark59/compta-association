@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comptabilité de l'association</title>
 <style>
-  :root { --bg:#0f0b1a; --card:#1a1428; --line:#2d2444; --txt:#eae6f5; --mute:#8f86a8; --acc:#8b5cf6; --ko:#f87171; }
+  :root { --bg:#0f0b1a; --card:#1a1428; --line:#2d2444; --txt:#eae6f5; --mute:#8f86a8; --acc:#8b5cf6; --ok:#34d399; --ko:#f87171; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 system-ui,sans-serif; padding:20px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
   h1 { font-size:22px; margin:0 0 4px; }
-  input, button { font:inherit; color:var(--txt); background:#120d20; border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
-  input:focus { outline:2px solid var(--acc); }
+  input, select, button { font:inherit; color:var(--txt); background:#120d20; border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
+  input:focus, select:focus { outline:2px solid var(--acc); }
   button { cursor:pointer; background:var(--acc); border:0; font-weight:600; }
   button:hover { filter:brightness(1.1); }
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--mute); font-weight:400; }
@@ -19,40 +19,77 @@
   #login p { margin:0 0 6px; color:var(--mute); font-size:13px; }
   #erreur { color:var(--ko); font-size:13px; min-height:18px; }
   #app { max-width:1100px; margin:auto; }
-  .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .hide { display:none !important; }
+
+  /* Formulaire : 6 colonnes sur grand écran, 2 sur mobile */
+  #formAjout { display:grid; grid-template-columns:140px 1fr 150px 140px 130px auto; gap:8px; margin-bottom:18px; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mute); font-weight:500; font-size:13px; }
+  .n { text-align:right; font-variant-numeric:tabular-nums; }
+  td.designation { white-space:normal; }
+  .recette { color:var(--ok); } .depense { color:var(--ko); }
+  .tag { background:#241b3a; border-radius:6px; padding:2px 8px; font-size:12px; }
+  @media (max-width:800px) { #formAjout { grid-template-columns:1fr 1fr; } #formAjout input[name=designation] { grid-column:1/-1; } }
 </style>
 </head>
 <body>
 
-<!-- ÉCRAN 1 : connexion (visible si personne n'est connecté) -->
 <form id="login" class="card hide">
-  <div>
-    <h1>Comptabilité</h1>
-    <p>Accès réservé aux membres.</p>
-  </div>
+  <div><h1>Comptabilité</h1><p>Accès réservé aux membres.</p></div>
   <input id="email" type="email" placeholder="Email" autocomplete="username" required>
   <input id="mdp" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
   <button type="submit">Se connecter</button>
   <div id="erreur"></div>
 </form>
 
-<!-- ÉCRAN 2 : application (visible si connecté). Vide pour l'instant, on le remplit aux étapes suivantes -->
 <div id="app" class="hide">
   <div class="top">
     <h1>Comptabilité de l'association</h1>
     <div><span id="qui" style="color:var(--mute);margin-right:10px"></span><button class="ghost" id="btnSortir">Déconnexion</button></div>
   </div>
-  <p style="color:var(--mute)">✅ Connexion OK. Ici viendra le tableau.</p>
+
+  <div class="card">
+    <!-- FORMULAIRE D'AJOUT -->
+    <form id="formAjout">
+      <input name="date" type="date" required>
+      <input name="designation" placeholder="Désignation (raison)" maxlength="120" required>
+      <select name="mode">
+        <option value="cb">CB</option>
+        <option value="especes">Espèces</option>
+        <option value="cheque">Chèque</option>
+        <option value="virement">Virement</option>
+      </select>
+      <select name="type">
+        <option value="recette">Recette (+)</option>
+        <option value="depense">Dépense (−)</option>
+      </select>
+      <input name="montant" type="number" step="0.01" min="0.01" placeholder="Montant €" required>
+      <button type="submit">Ajouter</button>
+    </form>
+
+    <!-- TABLEAU -->
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette (+)</th><th class="n">Dépense (−)</th><th class="n">Solde</th></tr>
+        </thead>
+        <tbody id="lignes"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <script type="module">
-  // 1) On charge Firebase depuis une URL (pas besoin de npm)
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  // NOUVEAU : Firestore (la base de données)
+  import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  // 2) Ta config (même chose que dans la console Firebase)
   const firebaseConfig = {
     apiKey: "AIzaSyDFaVObQHuck-Sov9MEinivmLfvy59SE1A",
     authDomain: "compta-association-dbd22.firebaseapp.com",
@@ -62,33 +99,87 @@
     appId: "1:35641159683:web:500fe151f25bc491829e36"
   };
 
-  // 3) On démarre Firebase et on récupère le service d'authentification
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  const db = getFirestore(app);                       // NOUVEAU : accès à la base
+  const ecrituresRef = collection(db, "ecritures");   // NOUVEAU : le "classeur" qui contiendra toutes les écritures
 
-  const $ = id => document.getElementById(id); // raccourci : $("email") = document.getElementById("email")
+  const $ = id => document.getElementById(id);
+  const NOMS_MODES = { cb: "CB", especes: "Espèces", cheque: "Chèque", virement: "Virement" };
+  const euros = centimes => (centimes / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 
-  // 4) Firebase nous PRÉVIENT à chaque changement : connecté / déconnecté (même au rechargement de la page)
+  let ecritures = [];     // la liste de TOUTES les écritures, telle que Firestore nous l'envoie
+  let arreterEcoute = null; // pour arrêter l'écoute à la déconnexion
+
+  // ---------- CONNEXION (inchangé) ----------
   onAuthStateChanged(auth, utilisateur => {
-    $("login").classList.toggle("hide", !!utilisateur); // connecté → on cache le formulaire
-    $("app").classList.toggle("hide", !utilisateur);    // connecté → on montre l'appli
-    if (utilisateur) $("qui").textContent = utilisateur.email;
+    $("login").classList.toggle("hide", !!utilisateur);
+    $("app").classList.toggle("hide", !utilisateur);
+    if (arreterEcoute) { arreterEcoute(); arreterEcoute = null; }
+    if (!utilisateur) { ecritures = []; return; }
+    $("qui").textContent = utilisateur.email;
+
+    // NOUVEAU : onSnapshot = "préviens-moi à chaque changement dans la base".
+    // Une écriture ajoutée depuis un autre PC apparaît ici toute seule.
+    arreterEcoute = onSnapshot(ecrituresRef,
+      resultat => {
+        ecritures = resultat.docs.map(d => ({ id: d.id, ...d.data() }));
+        afficher();
+      },
+      erreur => console.error("Lecture refusée :", erreur) // "permission denied" = problème de règles à l'étape 3
+    );
   });
 
-  // 5) Clic sur "Se connecter"
-  $("login").addEventListener("submit", async evenement => {
-    evenement.preventDefault(); // empêche la page de se recharger
+  $("login").addEventListener("submit", async e => {
+    e.preventDefault();
     $("erreur").textContent = "";
-    try {
-      await signInWithEmailAndPassword(auth, $("email").value, $("mdp").value);
-    } catch (e) {
-      console.error(e); // ouvre la console (F12) pour voir le vrai code d'erreur
-      $("erreur").textContent = "Email ou mot de passe incorrect.";
-    }
+    try { await signInWithEmailAndPassword(auth, $("email").value, $("mdp").value); }
+    catch (err) { console.error(err); $("erreur").textContent = "Email ou mot de passe incorrect."; }
+  });
+  $("btnSortir").addEventListener("click", () => signOut(auth));
+
+  // ---------- AJOUT D'UNE ÉCRITURE ----------
+  $("formAjout").addEventListener("submit", async e => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    await addDoc(ecrituresRef, {
+      date: f.get("date"),                                   // "2026-11-14" : ce format se trie bien comme du texte
+      designation: f.get("designation").trim(),
+      mode: f.get("mode"),
+      type: f.get("type"),                                   // "recette" ou "depense"
+      montantCts: Math.round(parseFloat(f.get("montant")) * 100), // on stocke en CENTIMES (entier), voir explication
+      creeLe: serverTimestamp()                              // heure d'enregistrement : sert à départager deux écritures du même jour
+    });
+    const date = f.get("date");
+    e.target.reset();
+    e.target.date.value = date;            // on garde la date : pratique pour saisir plusieurs lignes d'affilée
+    e.target.designation.focus();
   });
 
-  // 6) Clic sur "Déconnexion"
-  $("btnSortir").addEventListener("click", () => signOut(auth));
+  // ---------- AFFICHAGE : tri + solde cumulé ----------
+  function afficher() {
+    // 1) Tri chronologique : d'abord par date, puis par heure de saisie si même jour
+    const triees = [...ecritures].sort((a, b) =>
+      a.date.localeCompare(b.date) || (a.creeLe?.seconds ?? 0) - (b.creeLe?.seconds ?? 0));
+
+    // 2) On parcourt de la plus ancienne à la plus récente en cumulant : c'est ça, le solde
+    let solde = 0;
+    $("lignes").innerHTML = triees.map(l => {
+      solde += (l.type === "recette" ? 1 : -1) * l.montantCts;
+      const [a, m, j] = l.date.split("-");
+      return `<tr>
+        <td>${j}/${m}/${a}</td>
+        <td class="designation">${echapper(l.designation)}</td>
+        <td><span class="tag">${NOMS_MODES[l.mode]}</span></td>
+        <td class="n recette">${l.type === "recette" ? euros(l.montantCts) : ""}</td>
+        <td class="n depense">${l.type === "depense" ? euros(l.montantCts) : ""}</td>
+        <td class="n"><b>${euros(solde)}</b></td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="6" style="color:var(--mute);text-align:center;padding:24px">Aucune écriture pour l'instant.</td></tr>`;
+  }
+
+  // Sécurité : empêche qu'une désignation contenant du HTML (<script>…) soit exécutée par le navigateur
+  const echapper = s => s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 </script>
 </body>
 </html>
