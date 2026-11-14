@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Comptabilité de l'association</title>
+<title>Comptabilité</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%238b5cf6'/%3E%3Crect x='10' y='21' width='4' height='8' rx='1' fill='white'/%3E%3Crect x='18' y='15' width='4' height='14' rx='1' fill='white'/%3E%3Crect x='26' y='18' width='4' height='11' rx='1' fill='white'/%3E%3C/svg%3E">
 <style>
   :root { --bg:#0f0b1a; --card:#1a1428; --card2:#201833; --line:#2d2444; --txt:#eae6f5; --mute:#8f86a8; --acc:#8b5cf6; --ok:#4ade80; --ko:#fb7185; }
   * { box-sizing: border-box; }
@@ -24,6 +25,17 @@
   #app { max-width:1100px; margin:auto; display:grid; gap:16px; }
   .top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
   .hide { display:none !important; }
+  .logo { display:inline-flex; filter:drop-shadow(0 4px 14px rgba(139,92,246,.45)); }
+  .logoImg { height:54px; width:auto; max-width:150px; object-fit:contain; border-radius:10px; display:block; }
+  .hero { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:18px 22px; border-radius:18px; position:relative; overflow:hidden;
+          background:linear-gradient(120deg,#2a1b52 0%,var(--card) 65%); border:1px solid #3a2c63; }
+  .hero::after { content:""; position:absolute; right:-70px; top:-90px; width:280px; height:280px; border-radius:50%;
+          background:radial-gradient(circle,rgba(139,92,246,.35),transparent 70%); pointer-events:none; }
+  .hero .titre { flex:1; min-width:220px; position:relative; }
+  .hero h1 { margin:0; letter-spacing:-.01em; }
+  .hero .sous { color:var(--mute); font-size:13px; text-transform:capitalize; }
+  .hero .outils { position:relative; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #qui { background:rgba(255,255,255,.06); border-radius:20px; padding:4px 12px; font-size:13px; color:var(--mute); }
 
   .resume { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; }
   .resume .card { flex:1; min-width:150px; padding:16px 18px; }
@@ -83,7 +95,7 @@
 <body>
 
 <form id="login" class="card hide">
-  <div><h1>Comptabilité</h1><p>Accès réservé aux membres.</p></div>
+  <div style="text-align:center"><span class="logo" data-logo></span><h1 class="nomAsso" style="margin-top:12px"></h1><p>Accès réservé aux membres.</p></div>
   <input id="email" type="email" placeholder="Email" autocomplete="username" required>
   <input id="mdp" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
   <button type="submit">Se connecter</button>
@@ -91,14 +103,18 @@
 </form>
 
 <div id="app" class="hide">
-  <div class="top">
-    <h1>Comptabilité de l'association</h1>
-    <div>
-      <span id="qui" style="color:var(--mute);margin-right:10px"></span>
+  <header class="hero">
+    <span class="logo" data-logo></span>
+    <div class="titre">
+      <h1 class="nomAsso"></h1>
+      <div class="sous">Livre de comptes · <span id="dateJour"></span></div>
+    </div>
+    <div class="outils">
+      <span id="qui"></span>
       <button class="ghost" id="btnDepart">Soldes de départ</button>
       <button class="ghost" id="btnSortir">Déconnexion</button>
     </div>
-  </div>
+  </header>
 
   <div class="resume">
     <div class="card"><small>Caisse (espèces)</small><b id="sCaisse">0,00 €</b><div class="alerte" id="alerteCaisse"></div></div>
@@ -195,6 +211,21 @@
   let depart = { caisseCts: 0, banqueCts: 0 };
   let arreterEcoutes = [];
   let idEnEdition = null;
+
+  // ✏️ À MODIFIER : le nom de ton association
+  const NOM_ASSOCIATION = "Anim' et Traditions";
+  const LOGO_URL = "https://i.postimg.cc/zXpyvrJJ/image-2026-11-14-173011405.png";
+  const LOGO_SVG = `<svg viewBox="0 0 40 40" width="44" height="44"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="40" height="40" rx="11" fill="url(#lg)"/><rect x="10" y="21" width="4" height="8" rx="1" fill="#fff"/><rect x="18" y="15" width="4" height="14" rx="1" fill="#fff"/><rect x="26" y="18" width="4" height="11" rx="1" fill="#fff"/></svg>`;
+  // Le vrai logo ; si l'image ne charge pas (hébergeur en panne…), on affiche le logo générique à la place
+  document.querySelectorAll("[data-logo]").forEach(e => {
+    const img = new Image();
+    img.src = LOGO_URL; img.alt = NOM_ASSOCIATION; img.className = "logoImg";
+    img.onerror = () => { e.innerHTML = LOGO_SVG; };
+    e.appendChild(img);
+  });
+  document.querySelectorAll(".nomAsso").forEach(e => e.textContent = NOM_ASSOCIATION);
+  document.title = "Comptabilité — " + NOM_ASSOCIATION;
+  $("dateJour").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   // ---------- CONNEXION ----------
   onAuthStateChanged(auth, utilisateur => {
