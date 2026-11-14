@@ -103,13 +103,15 @@
   .chip button { background:none; border:0; color:var(--mute); padding:0 6px; font-size:13px; }
   #formAjout select[name=evenement] { grid-column:2 / span 2; grid-row:2; }
   #formAjout > button { grid-column:6; grid-row:1; }
+  #formAjout input[name=numCheque] { grid-column:4 / span 2; grid-row:2; }
+  .numChq { font-size:12px; color:var(--mute); }
   dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:16px; padding:22px; width:min(380px,92vw); }
   dialog::backdrop { background:rgba(0,0,0,.6); }
   dialog label { display:block; margin:12px 0 4px; color:var(--mute); font-size:13px; }
   dialog input { width:100%; }
   dialog .btns { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
 
-  @media (max-width:800px) { #formAjout { grid-template-columns:1fr 1fr; } #formAjout input[name=designation] { grid-column:1/-1; } td.actions { opacity:1; } #formAjout select[name=evenement] { grid-column:1/-1; grid-row:auto; } #formAjout > button { grid-column:auto; grid-row:auto; } }
+  @media (max-width:800px) { #formAjout { grid-template-columns:1fr 1fr; } #formAjout input[name=designation] { grid-column:1/-1; } td.actions { opacity:1; } #formAjout select[name=evenement] { grid-column:1/-1; grid-row:auto; } #formAjout > button { grid-column:auto; grid-row:auto; } #formAjout input[name=numCheque] { grid-column:1/-1; grid-row:auto; } }
 </style>
 </head>
 <body>
@@ -161,6 +163,7 @@
       </select>
       <input name="montant" type="number" step="0.01" min="0.01" placeholder="Montant €" required>
       <select name="evenement" title="Événement concerné (facultatif)"></select>
+      <input name="numCheque" class="hide" placeholder="N° du chèque" inputmode="numeric" maxlength="20" autocomplete="off">
       <button type="submit" id="btnValider">Ajouter</button>
     </form>
     <div id="modeEdition"></div>
@@ -302,8 +305,14 @@
       mode: f.get("mode"),
       type: f.get("type"),
       montantCts: Math.round(parseFloat(f.get("montant")) * 100),
-      evenementId: f.get("evenement") === "__nouveau" ? "" : f.get("evenement")
+      evenementId: f.get("evenement") === "__nouveau" ? "" : f.get("evenement"),
+      numCheque: f.get("mode") === "cheque" ? (f.get("numCheque") || "").trim() : ""   // texte, pas nombre : on garde les zéros du début
     };
+    // Un même n° de chèque deux fois = presque toujours une faute de frappe : on demande confirmation
+    if (donnees.numCheque) {
+      const doublon = ecritures.find(x => x.numCheque === donnees.numCheque && x.id !== idEnEdition);
+      if (doublon && !confirm(`Le chèque n° ${donnees.numCheque} existe déjà (${dateFr(doublon.date)} — ${doublon.designation}).\n\nEnregistrer quand même ?`)) return;
+    }
     $("btnValider").disabled = true;
     try {
       if (idEnEdition) {
@@ -314,6 +323,7 @@
         await addDoc(ecrituresRef, { ...donnees, creeLe: serverTimestamp(), creePar: auth.currentUser.email });
         form.reset();
         form.date.value = donnees.date;
+        majChampCheque();
         form.evenement.value = donnees.evenementId;   // on garde l'événement : pratique pour saisir plusieurs achats d'affilée
         form.designation.focus();
       }
@@ -339,6 +349,8 @@
       form.mode.value = ecriture.mode;
       form.type.value = ecriture.type;
       form.evenement.value = ecriture.evenementId || "";
+      form.numCheque.value = ecriture.numCheque || "";
+      majChampCheque();
       form.montant.value = ecriture.montantCts / 100;
       $("btnValider").textContent = "Enregistrer";
       $("modeEdition").innerHTML = `✎ Modification de « ${echapper(ecriture.designation)} » <button type="button" class="ghost" id="btnAnnulerEdition">Annuler</button>`;
@@ -361,6 +373,7 @@
   function sortirDeLEdition() {
     idEnEdition = null;
     $("formAjout").reset();
+    majChampCheque();
     $("btnValider").textContent = "Ajouter";
     $("modeEdition").innerHTML = "";
     afficher();
@@ -390,7 +403,7 @@
     const mots = normaliser($("recherche").value.replace(/€/g, "")).split(/\s+/).filter(Boolean);
     if (!mots.length) return lignes;
     return lignes.filter(l => {
-      const designation = normaliser(l.designation + " " + (l.evenementId ? nomEvt(l.evenementId) : ""));
+      const designation = normaliser(l.designation + " " + (l.evenementId ? nomEvt(l.evenementId) : "") + " " + (l.numCheque || ""));
       const montant = (l.montantCts / 100).toFixed(2);   // "12.50"
       const montantBrut = montant.replace(".", "");       // "1250"
       // Chaque mot doit être trouvé quelque part : dans la raison OU dans le montant
@@ -406,6 +419,16 @@
       e.preventDefault(); $("recherche").focus();
     }
   });
+
+  // ---------- NOUVEAU : N° DE CHÈQUE ----------
+  function majChampCheque() {
+    const f = $("formAjout");
+    const estCheque = f.mode.value === "cheque";
+    f.numCheque.classList.toggle("hide", !estCheque);
+    if (!estCheque) f.numCheque.value = "";
+  }
+  $("formAjout").mode.addEventListener("change", majChampCheque);
+  majChampCheque();
 
   // ---------- NOUVEAU : ÉVÉNEMENTS ----------
   function remplirListeEvenements() {
@@ -526,7 +549,7 @@
       if (l.modifiePar) trace += ` — modifié par ${l.modifiePar}`;
       return entete + `<tr class="ligne ${l.id === idEnEdition ? "enEdition" : ""}" title="${echapper(trace)}">
         <td>${dateFr(l.date)}</td>
-        <td class="designation">${echapper(l.designation)}${l.evenementId ? `<div class="evtNom">${echapper(nomEvt(l.evenementId))}</div>` : ""}</td>
+        <td class="designation">${echapper(l.designation)}${l.numCheque ? `<div class="numChq">Chèque n° ${echapper(l.numCheque)}</div>` : ""}${l.evenementId ? `<div class="evtNom">${echapper(nomEvt(l.evenementId))}</div>` : ""}</td>
         <td><span class="tag m-${l.mode}">${NOMS_MODES[l.mode]}</span></td>
         <td class="n recette">${l.type === "recette" ? "+ " + euros(l.montantCts) : ""}</td>
         <td class="n depense">${l.type === "depense" ? "− " + euros(l.montantCts) : ""}</td>
