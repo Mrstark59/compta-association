@@ -66,6 +66,8 @@
   tr.enEdition td { background:#2a1f45; }
   .n { text-align:right; font-variant-numeric:tabular-nums; }
   td.designation { white-space:normal; min-width:180px; }
+  .pot { color:#6f6688; }
+  .pot.touche { color:var(--txt); font-weight:600; }
   .recette { color:var(--ok); } .depense { color:var(--ko); }
 
   /* NOUVEAU : séparateur de mois */
@@ -180,7 +182,7 @@
     <div class="scroll">
       <table>
         <thead>
-          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette</th><th class="n">Dépense</th><th class="n" title="Solde total après cette écriture">Solde</th><th></th></tr>
+          <tr><th>Date</th><th>Désignation</th><th>Mode</th><th class="n">Recette</th><th class="n">Dépense</th><th class="n" title="Espèces en caisse après cette écriture">Espèces</th><th class="n" title="CB, chèque, virement : solde du compte après cette écriture">Banque</th><th class="n" title="Total après cette écriture">Total</th><th></th></tr>
         </thead>
         <tbody id="lignes"></tbody>
       </table>
@@ -484,7 +486,7 @@
     const avecSolde = triees.map(l => {
       const signe = l.type === "recette" ? 1 : -1;
       if (l.mode === "especes") caisse += signe * l.montantCts; else banque += signe * l.montantCts;
-      return { ...l, solde: caisse + banque };
+      return { ...l, solde: caisse + banque, caisseApres: caisse, banqueApres: banque };
     });
 
     // NOUVEAU : bilan par événement, calculé sur TOUTES les écritures (jamais filtré par la recherche)
@@ -518,7 +520,7 @@
         moisPrecedent = cle;
         const [a, m] = cle.split("-");
         const nomMois = new Date(a, m - 1, 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-        entete = `<tr class="mois"><td colspan="7"><span>${nomMois}</span><small>+${euros(parMois[cle].rec)} · −${euros(parMois[cle].dep)}</small></td></tr>`;
+        entete = `<tr class="mois"><td colspan="9"><span>${nomMois}</span><small>+${euros(parMois[cle].rec)} · −${euros(parMois[cle].dep)}</small></td></tr>`;
       }
       let trace = l.creePar ? `Saisi par ${l.creePar}` : "";
       if (l.modifiePar) trace += ` — modifié par ${l.modifiePar}`;
@@ -528,13 +530,13 @@
         <td><span class="tag m-${l.mode}">${NOMS_MODES[l.mode]}</span></td>
         <td class="n recette">${l.type === "recette" ? "+ " + euros(l.montantCts) : ""}</td>
         <td class="n depense">${l.type === "depense" ? "− " + euros(l.montantCts) : ""}</td>
-        <td class="n"><b>${euros(l.solde)}</b></td>
+        <td class="n pot ${l.mode === "especes" ? "touche" : ""}">${euros(l.caisseApres)}</td><td class="n pot ${l.mode !== "especes" ? "touche" : ""}">${euros(l.banqueApres)}</td><td class="n"><b>${euros(l.solde)}</b></td>
         <td class="actions">
           <button data-action="modifier" data-id="${l.id}" title="Modifier">${ICON_EDIT}</button>
           <button data-action="supprimer" data-id="${l.id}" title="Supprimer">${ICON_TRASH}</button>
         </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="7" class="vide">${$("recherche").value || filtreEvenement ? "Aucun résultat." : "Aucune écriture pour l'instant."}</td></tr>`;
+    }).join("") || `<tr><td colspan="9" class="vide">${$("recherche").value || filtreEvenement ? "Aucun résultat." : "Aucune écriture pour l'instant."}</td></tr>`;
 
     // Ligne d'information sous la barre : utile pour "combien a-t-on dépensé en essence ?"
     const chipEvt = filtreEvenement ? `<span class="chip">${echapper(filtreEvenement === "__aucun" ? "Fonctionnement général" : nomEvt(filtreEvenement))}<button data-effacer-evt title="Retirer le filtre">✕</button></span>` : "";
